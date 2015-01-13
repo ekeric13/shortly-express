@@ -10,6 +10,7 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
+var flash = require('connect-flash');
 
 var app = express();
 
@@ -22,6 +23,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
+app.use(flash())
 app.use(session({
   secret: 'keyboard cat',
   resave: false,
@@ -29,17 +31,15 @@ app.use(session({
 }));
 
 
-app.get('/',function(req, res) {
+app.get('/', util.checkSession, function(req, res) {
   res.render('index');
 });
 
-app.get('/create',
-function(req, res) {
+app.get('/create', util.checkSession, function(req, res) {
   res.render('index');
 });
 
-app.get('/links',
-function(req, res) {
+app.get('/links', util.checkSession ,function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
@@ -84,31 +84,37 @@ function(req, res) {
 /************************************************************/
 
 app.get("/login", function(req, res){
-  res.render("login");
+  res.render("login", { message: req.flash('username') });
 });
+
 
 app.post('/login', function(req, res) {
 
     console.log('req.body -> ', req.body);
     var username = req.body.username;
     var password = req.body.password;
+    new User({username: username}).fetch().then(function(user){
+      if(!user){
+        req.flash("username", "username is incorrect")
+        // if not exisiting then render login and display error message
+        res.redirect('/login');
+      }else{
+        user.checkPasswordHash(password, function(matches){
+          if(matches){
+            //create session
+            util.setSession(req, res, user);
+          }else{
+            //TODO - error message p/w incorrect
+            res.redirect('/login');
+          }
+        });
+      }
+    });
     // function that query the database to check if username exists
     // this will probably be using bookshelf
-      // if not exisiting then render login and display error message
       // if is existing look at password. use bcrypt
         //if no password redirect to login and display error message
         // if password then generate session. redirect to root path.
-
-    if(username === 'demo' && password === 'demo'){
-        req.session.regenerate(function(){
-        req.session.user = username;
-        console.log('req.session ->', req.session);
-        // res.redirect('/restricted');
-        });
-    }
-    else {
-       res.render('login');
-    }
 });
 
 app.get("/signup", function(req, res){
@@ -120,13 +126,41 @@ app.post('/signup', function(req, res) {
     console.log('req.body -> ', req.body);
     var username = req.body.username;
     var password = req.body.password;
-    // create new username
-    // this will probably be using bookshelf
-      // if is existing render signup and throw error message
-      // if not exisiting then using bcrypt hash password
+
+    // check to make sure if username is created
+    new User({username: username}).fetch().then(function(user){
+      if(!user){
+          // if not exisiting then create a new user using bcrypt hash password
+          var newUser = new User({
+            username: username,
+            password: password
+          });
+
+          // newUser.createPasswordHash(function(){
+          //   newUser.save().then(function(sessionUser){
+          //     util.setSession(req, res, sessionUser);
+          //   });
+
+          newUser.save().then(function(sessionUser){
+            util.setSession(req, res, sessionUser);
+          });
+
+      } else {
+        // if is existing render signup and throw error message
+        res.redirect("/signup")
+      }
+    })
         //use bookshelf to create user w/req.body.username and bcrypt has password
         // generate session. redirect to root path.
 });
+
+app.get("/logout", function(req, res){
+  // var username = req.body.username;
+  // var password = req.body.password;
+  console.log('logging you out');
+  util.destroySession(req, res)
+  console.log('req.session ->', req.session);
+})
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
