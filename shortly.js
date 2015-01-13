@@ -2,7 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
-
+var session = require('express-session');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -22,25 +22,30 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
+app.use(session({
+  secret: 'keyboard cat',
+  resave: false,
+  saveUninitialized: true
+}));
 
-app.get('/', 
+
+app.get('/',function(req, res) {
+  res.render('index');
+});
+
+app.get('/create',
 function(req, res) {
   res.render('index');
 });
 
-app.get('/create', 
-function(req, res) {
-  res.render('index');
-});
-
-app.get('/links', 
+app.get('/links',
 function(req, res) {
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
 });
 
-app.post('/links', 
+app.post('/links',
 function(req, res) {
   var uri = req.body.url;
 
@@ -78,7 +83,50 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+app.get("/login", function(req, res){
+  res.render("login");
+});
 
+app.post('/login', function(req, res) {
+
+    console.log('req.body -> ', req.body);
+    var username = req.body.username;
+    var password = req.body.password;
+    // function that query the database to check if username exists
+    // this will probably be using bookshelf
+      // if not exisiting then render login and display error message
+      // if is existing look at password. use bcrypt
+        //if no password redirect to login and display error message
+        // if password then generate session. redirect to root path.
+
+    if(username === 'demo' && password === 'demo'){
+        req.session.regenerate(function(){
+        req.session.user = username;
+        console.log('req.session ->', req.session);
+        // res.redirect('/restricted');
+        });
+    }
+    else {
+       res.render('login');
+    }
+});
+
+app.get("/signup", function(req, res){
+  res.render("signup");
+});
+
+app.post('/signup', function(req, res) {
+
+    console.log('req.body -> ', req.body);
+    var username = req.body.username;
+    var password = req.body.password;
+    // create new username
+    // this will probably be using bookshelf
+      // if is existing render signup and throw error message
+      // if not exisiting then using bcrypt hash password
+        //use bookshelf to create user w/req.body.username and bcrypt has password
+        // generate session. redirect to root path.
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
